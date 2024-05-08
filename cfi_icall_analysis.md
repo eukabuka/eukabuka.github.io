@@ -5,11 +5,12 @@ Clang CFI. I'm mostly interested in how CFI can be used with C codebases, and wi
 on the `icall` mechanism intended to prevent certain forms of control flow hijacks
 involving indirect control flow(eg: function pointer hijacks).
 
-This [trailofbits blogpost](https://blog.trailofbits.com/2016/10/17/lets-talk-about-cfi-clang-edition/) describes that various kinds of CFI options. [This](https://github.com/trailofbits/clang-cfi-showcase) is an github repository with related source code meant to showcase the kinds of control flow that are allowed/blocked by CFI.
+This [trailofbits blogpost](https://blog.trailofbits.com/2016/10/17/lets-talk-about-cfi-clang-edition/) describes that various kinds of CFI options. [This](https://github.com/trailofbits/clang-cfi-showcase) is an github repository with related source code meant to showcase the kinds of control flow that are allowed/blocked by CFI. I found disassembling
+the cfi-icall example in this repository to be very educational.
 
-Before proceeding, browse through [this](https://github.com/trailofbits/clang-cfi-showcase/blob/master/cfi_icall.c). When [compiled with CFI icall](https://github.com/trailofbits/clang-cfi-showcase/blob/master/Makefile#L16), passing in command line arguments `0`, or
-`1` WAI, and using arguments `2` or `3` result in a SIGILL. Without the CFI options,
-using `2` and `3` would not result in a SIGILL.
+Before proceeding, browse through [the icall example](https://github.com/trailofbits/clang-cfi-showcase/blob/master/cfi_icall.c). When [compiled with CFI icall](https://github.com/trailofbits/clang-cfi-showcase/blob/master/Makefile#L16), passing in command line
+arguments `0`, or `1` WAI, and using arguments `2` or `3` result in a SIGILL. Without
+the CFI options, using `2` and `3` would not result in a SIGILL.
 
 (All examples are compiled with clang-14 on Ubuntu).
 
@@ -95,8 +96,9 @@ The next step of instructions try to compute the index of the entry within the j
 0x00000000000012b2 <+354>:	or     rax,rdx
 ```
 
-`rax` is initialized with the start address of the jump table. The base address is subtracted
-and divided by 8 to get the index. Ignore the `shl` instruction(and the subsequent `or`) for now.
+`rax` is initialized with the start address of the jump table. The base address is
+subtracted and divided by 8 to get the index. We can ignore the `shl` instruction
+(and the subsequent `or`) for now.
 
 Next, the index is (unsigned)compared against 2.
 
@@ -110,6 +112,7 @@ Next, the index is (unsigned)compared against 2.
 If the index is below or equal to 0x2, `call rcx` is executed.
 
 ## Using arguments `2`
+This case simulates control flow hijacking to a function that has a different signature.
 
 ```bash
 0x000000000000128f <+319>:	lea    rcx,[rip+0x2da2]        # 0x4038 <f>
@@ -141,6 +144,25 @@ is executed, resulting in a SIGILL.
 CFI. Might be a fun idea for a CTF challenge.
 
 ## Using arguments `3`
+This case seems to be intended to simulate the case where control flow may be
+redirected to a ROP gadget by overwriting the contents of a function pointer. It does not
+seem that the example is able to demonstrate this when compiled with CFI.
 
+Looking at the source we have:
+```
+    .not_entries = {(int_arg_fn)((uintptr_t)(not_entry_point)+0x20)}
+```
 
+When compiled with CFI, `not_entry_point` refers to the jumptable entry that calls
+into `not_entry_point.cfi`(the actual function). To understand how CFI acts when a
+function pointer is overwritten with a gadget address, we would need `.not_entries` to
+be set to `not_entry_point.cfi + 0x20`.
 
+```
+=> 0x55555555528f <main+319>:	lea    rcx,[rip+0x2da2]        # 0x555555558038 <f>
+   0x555555555296 <main+326>:	mov    rcx,QWORD PTR [rcx+rax*8]
+```
+
+In order to do this, I manually set `rcx` to `not_entry_point.cfi + 0x20` after the above
+instructions are executed. As you might have guessed, the length check stops the `call`
+and we get SIGILL instead.
