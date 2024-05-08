@@ -34,9 +34,9 @@ is then called.
 Before looking at the CFI version, here is a preview of what to expect when a function
 that is allowed by CFI(arguments `0` or `1`) is called:
 * The address loaded at `rax+rcx*8` will not necessarily point to the function themselves
-anymore. Instead they will point into an entry in a jump table. This table will contain
+anymore. Instead they will point into an entry in a jumptable. This table will contain
 `jmp` instructions to the actual function target.
-* before calling into the jump table entry, the index into the jump table entry will be
+* before calling into the jumptable entry, the index into the jumptable entry will be
 validated. if the index is valid, the `call` instruction is executed. If not, SIGILL is
 triggered.
 
@@ -67,8 +67,8 @@ Lets break this down.
 ```
 
 This snippet loads an address into rcx. In a debugger(with CLI argument `0`), we can see that
-`rcx` points to an entry in the jump table. Each entry is 8 bytes(`5` bytes for the jump + `3`
-padding `int3` instructions).
+`rcx` points to an entry in the jumptable. Each entry is 8 bytes(`5` bytes for the
+jump + `3` padding `int3` instructions).
 ```
 gdb> x/20i $rcx
 0x555555555430 <int_arg>:	jmp    0x5555555552e0 <int_arg.cfi>
@@ -85,7 +85,7 @@ gdb> x/20i $rcx
 0x555555555447 <not_entry_point+7>:	int3
 ```
 
-The next step of instructions try to compute the index of the entry within the jump table.
+The next step of instructions try to compute the index of the entry within the jumptable.
 ```
 0x000000000000129a <+330>:	lea    rax,[rip+0x18f]        # 0x1430 <int_arg>
 0x00000000000012a1 <+337>:	mov    rdx,rcx
@@ -96,7 +96,7 @@ The next step of instructions try to compute the index of the entry within the j
 0x00000000000012b2 <+354>:	or     rax,rdx
 ```
 
-`rax` is initialized with the start address of the jump table. The base address is
+`rax` is initialized with the start address of the jumptable. The base address is
 subtracted and divided by 8 to get the index. We can ignore the `shl` instruction
 (and the subsequent `or`) for now.
 
@@ -135,7 +135,7 @@ gdb$ x/10i $rcx
 0x555555555374 <float_arg+36>:	lea    rdi,[rip+0xeb8]        # 0x555555556233
 ```
 
-Note that `rcx` does not point to the jump table, but to the actual function itself. In the
+Note that `rcx` does not point to the jumptable, but to the actual function itself. In the
 subsequent instructions `sub rdx, rax`(i.e. `loaded_call_address - jump_table_base`) results
 in a negative number, and results in an index value that does not make sense. The UD1
 is executed, resulting in a SIGILL.
@@ -166,3 +166,19 @@ be set to `not_entry_point.cfi + 0x20`.
 In order to do this, I manually set `rcx` to `not_entry_point.cfi + 0x20` after the above
 instructions are executed. As you might have guessed, the length check stops the `call`
 and we get SIGILL instead.
+
+## Final thoughts
+
+We saw the following instructions above:
+```
+=> 0x5555555552ae <main+350>:	shl    rdx,0x3d
+   0x5555555552b2 <main+354>:	or     rax,rdx
+   0x5555555552b5 <main+357>:	cmp    rax,0x2
+```
+
+At this point `rdx` is the offset of the jumptable entry from the jumptable base. When
+shift 61 bits to the left, the only bits remaining are LSB 3 bits(values range [0, 7]).
+If any of these bits are set, the value in `rax` will end up being very large. Is this
+the intent? I don't know.
+
+
