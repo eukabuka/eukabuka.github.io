@@ -11,13 +11,14 @@ rootless required `elogind`. Turns out this is not true.
 
 The first step is to remove `elogind` from the USE flags and recompile the X server and
 drivers. Next, we make change the owning group for `Xorg` to `input`, and make it
-a `setgid` binary. We also chown one of the `tty` as the user we want to login as.
+a `setgid` binary. We also chown one of the `tty` as the user we want to login as(I've
+chosen tty3, you can choose any tty you like).
 
 ```bash
 $ chown -v :input /usr/bin/Xorg
 $ chmod -v g+s /usr/bin/Xorg
 $ chown -v eukabuka /dev/tty3
-$ (tty3) startx ~/.xinitrc xmonad --vt3
+$ (tty3) startx ~/.xinitrc xmonad -- vt3
 ```
 
 Finally, remove elogind from the openrc boot level.
