@@ -5,8 +5,9 @@ Clang CFI. I'm mostly interested in how CFI can be used with C codebases, and wi
 on the `icall` mechanism intended to prevent certain forms of control flow hijacks
 involving indirect control flow(eg: function pointer hijacks).
 
-This [trailofbits blogpost](https://blog.trailofbits.com/2016/10/17/lets-talk-about-cfi-clang-edition/) describes that various kinds of CFI options. [This](https://github.com/trailofbits/clang-cfi-showcase) is an github repository with related source code meant to showcase the kinds of control flow that are allowed/blocked by CFI. I found disassembling
-the cfi-icall example in this repository to be very educational.
+This [trailofbits blogpost](https://blog.trailofbits.com/2016/10/17/lets-talk-about-cfi-clang-edition/) describes various kinds of CFI options. [This](https://github.com/trailofbits/clang-cfi-showcase) is a github repository with related source code meant to
+showcase the kinds of control flow that are allowed/blocked by CFI. I found
+disassembling the cfi-icall example in this repository to be very educational.
 
 Before proceeding, browse through [the icall example](https://github.com/trailofbits/clang-cfi-showcase/blob/master/cfi_icall.c). When [compiled with CFI icall](https://github.com/trailofbits/clang-cfi-showcase/blob/master/Makefile#L16), passing in command line
 arguments `0`, or `1` WAI, and using arguments `2` or `3` result in a SIGILL. Without
@@ -28,7 +29,8 @@ CFI is used.
 0x00000000000012a0 <+336>:	call   rax
 ```
 
-The address of the object `f` is loaded into `rax`. Then the pointer at the offset `rcx` is read into `rcx`. The argument to the function is loaded into `edi` and the function
+The address of the object `f` is loaded into `rax`. Then the pointer at the offset
+`rcx` is read into `rcx`. The argument to the function is loaded into `edi` and the function
 is then called.
 
 Before looking at the CFI version, here is a preview of what to expect when a function
