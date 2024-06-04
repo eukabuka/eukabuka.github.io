@@ -55,9 +55,13 @@ It essentially creates a unix sockerpair and sets that for use in the session.
 Depending on whether the `isolate_network` flag is set, a `clone(CLONE_NEWNET)` or
 `fork()` is called. The parent process then processes the login request.
 
-`drop_all_privs()` then drops the privileges. TODO
+`drop_all_privs()` then drops the privileges by calling `vsf_secutil_change_credentials`.
+It then does the following:
+1. It is possible to specify a config option `nopriv_user`. If this is set, the
+corresponding password file entries are fetched.
+2. It then drops all supplementary groups with `setgroups(0, NULL)`.
+3. In twoprocess mode, it does not attempt to drop capabilities.
 
-The sandbox is then initialized.
 
 ### chroot
 If the unpriv process is compromised, its file system access will be constrained using
@@ -66,8 +70,8 @@ stages.
 
 ### capabilities
 * The priv process dynamically calculates what privileges it needs. If no privileges are
-needed, the priv process exits.
-* The priv process receives the child username and password.
+needed, the priv process exits. As mentioned above this is only used in oneprocess mode
+(disabled by default, and not recommended for general use).
 
 ### not relying on any external binaries
 A minimal subset of `/bin/ls` functionality is implemented instead of trusting the
@@ -84,7 +88,15 @@ Since string handling is a common source of memory errors, create a string type 
 abstracts the underlying data and operate on it using a carefully audited set of APIs.
 
 ### ptrace sandbox, seccomp sandbox
-
-
-
+sandbox is initialized in `vsf_two_process_start()`.
+1. A global array `s_syscalls`(size tracked with `s_syscall_index`) is a list of syscalls
+that are to be enabled. Syscalls can be allowed by calling `allow_nr()`. Syscalls that
+are explicitely rejected can be recorded with `reject_nr`(which takes a syscall number
+along with a errcode) #TODO.
+2. `seccomp_sandbox_setup_prelogin()` and `seccomp_sandbox_setup_base()` allow 6-13
+syscalls(depending on the config) and 11 syscalls(read, write, mmap, munmap, mremap,
+gettimeofday, rt_sigreturn, restart_syscall, close, exit_group) respectively.
+`(mremap, ENOSYS)` and `(socket, EACCES)` are rejected explicitely.
+3. `seccomp_sandbox_lockdown()` then creates the `prog` PENDING
+4. `seccomp_sandbox_setup_postlogin` PENDING
 
